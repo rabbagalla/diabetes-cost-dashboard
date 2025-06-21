@@ -8,6 +8,7 @@ from fpdf import FPDF
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
+from datetime import datetime
 
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
@@ -16,11 +17,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
 from xgboost import XGBRegressor
 
-# Page settings
 st.set_page_config(page_title="Healthcare Cost Predictor", layout="centered")
 st.title("💊 AI-Powered Healthcare Cost Prediction")
 
-# Load and preprocess data
 @st.cache_data
 def load_data():
     url = "https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/insurance.csv"
@@ -64,12 +63,10 @@ model.fit(X_train, y_train)
 mae = mean_absolute_error(y_test, model.predict(X_test))
 r2 = r2_score(y_test, model.predict(X_test))
 
-# Sidebar model performance
 st.sidebar.header("📊 Model Performance")
 st.sidebar.metric("MAE", f"${mae:,.2f}")
 st.sidebar.metric("R² Score", f"{r2:.2f}")
 
-# SHAP global
 explainer = shap.Explainer(model.named_steps['xgb'], model.named_steps['preprocessor'].transform(X_train))
 shap_values = explainer(model.named_steps['preprocessor'].transform(X_train))
 fig_global, ax_global = plt.subplots(figsize=(8, 4))
@@ -77,7 +74,6 @@ shap.plots.bar(shap_values, show=False)
 st.sidebar.subheader("🔍 Top Cost Drivers")
 st.sidebar.pyplot(fig_global)
 
-# Input form
 with st.form("input_form"):
     name = st.text_input("Patient Name", value="John Doe")
     phone = st.text_input("Phone Number")
@@ -135,7 +131,7 @@ if submitted:
     for s in suggestions:
         st.write(s)
 
-    # PDF Report
+    # PDF generation
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -157,11 +153,12 @@ if submitted:
             creds_dict = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"])
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             client = gspread.authorize(creds)
-            sheet = client.open("PatientCostData").sheet1
+            sheet = client.open("PatientCostData").worksheet("Sheet1")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             sheet.append_row([
                 name, phone, address, age, height_cm, weight_kg, bmi,
-                children, smoker, sex, region,
-                diabetes_risk, f"${prediction:,.2f}"
+                smoker, sex, region, children,
+                diabetes_risk, f"${prediction:,.2f}", timestamp
             ])
         except Exception as e:
             st.error(f"⚠️ Error writing to Google Sheet: {e}")
