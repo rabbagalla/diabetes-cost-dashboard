@@ -5,6 +5,7 @@ import shap
 import matplotlib.pyplot as plt
 from io import BytesIO
 from fpdf import FPDF
+from datetime import datetime
 
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
@@ -13,6 +14,22 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
 from xgboost import XGBRegressor
 
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+# -------------------------
+# Google Sheets Setup
+# -------------------------
+def connect_sheet():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name("gcred.json", scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("Patient_Cost_Data").sheet1
+    return sheet
+
+# -------------------------
+# Streamlit Page Setup
+# -------------------------
 st.set_page_config(page_title="Healthcare Cost Predictor", layout="centered")
 st.title("💊 AI-Powered Healthcare Cost Prediction")
 
@@ -72,12 +89,14 @@ shap.plots.bar(shap_values, show=False)
 st.sidebar.subheader("🔍 Top Cost Drivers")
 st.sidebar.pyplot(fig_global)
 
-# ==============================
-# User Form with BMI Calculation
-# ==============================
-
+# -------------------------
+# User Input Form
+# -------------------------
 with st.form("input_form"):
     name = st.text_input("Patient Name", value="John Doe")
+    address = st.text_input("Patient Address")
+    phone = st.text_input("Phone Number (10 digits)")
+
     age = st.slider("Age", 18, 100, 40)
     height_cm = st.number_input("Height (in cm)", min_value=100.0, max_value=250.0, value=170.0)
     weight_kg = st.number_input("Weight (in kg)", min_value=30.0, max_value=200.0, value=70.0)
@@ -94,10 +113,9 @@ with st.form("input_form"):
 
     submitted = st.form_submit_button("Predict Cost")
 
-# ===========================
-# Model Prediction + Output
-# ===========================
-
+# -------------------------
+# Prediction + Save + PDF
+# -------------------------
 if submitted:
     input_df = pd.DataFrame([{
         "age": age,
@@ -112,9 +130,21 @@ if submitted:
     prediction = model.predict(input_df)[0]
     st.subheader(f"💰 Predicted Medical Cost for {name}: **${prediction:,.2f}**")
 
+    # Save to Google Sheet
+    try:
+        sheet = connect_sheet()
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sheet.append_row([
+            name, phone, address, age, height_cm, weight_kg, bmi, smoker, sex, region,
+            children, diabetes_risk, round(prediction, 2), timestamp
+        ])
+        st.success("✅ Patient data stored in Google Sheet.")
+    except Exception as e:
+        st.error(f"❌ Error saving to Google Sheet: {e}")
+
+    # SHAP plot
     st.markdown("---")
     st.subheader("📌 Why this prediction? (SHAP)")
-
     processed_input = model.named_steps['preprocessor'].transform(input_df)
     feature_names = model.named_steps['preprocessor'].get_feature_names_out()
     processed_df = pd.DataFrame(processed_input, columns=feature_names)
@@ -124,12 +154,9 @@ if submitted:
     shap.plots.waterfall(individual_shap[0], show=False)
     st.pyplot(fig_individual)
 
-    # ========================
-    # Cost-Saving Suggestions
-    # ========================
+    # Suggestions
     st.markdown("---")
     st.subheader("💡 Suggestions to Reduce Future Costs")
-
     suggestions = []
     if smoker == "yes":
         suggestions.append("• Stop smoking to reduce long-term risks.")
@@ -139,24 +166,22 @@ if submitted:
         suggestions.append("• Enroll in a diabetes prevention or care management plan.")
     if age > 60:
         suggestions.append("• Schedule regular screenings and wellness checkups.")
-    if len(suggestions) == 0:
+    if not suggestions:
         suggestions.append("• Maintain your current healthy lifestyle!")
 
     for s in suggestions:
         st.write(s)
 
-    # ======================
-    # PDF Report Generator
-    # ======================
+    # PDF Report
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-
     pdf.set_title("Medical Cost Prediction Report")
     pdf.cell(200, 10, txt=f"Patient Report: {name}", ln=True, align="C")
-    pdf.cell(200, 10, txt=f"Predicted Medical Cost: ${prediction:,.2f}", ln=True, align="L")
-    pdf.ln(10)
-    pdf.cell(200, 10, txt="Input Summary:", ln=True)
+    pdf.cell(200, 10, txt=f"Predicted Medical Cost: ${prediction:,.2f}", ln=True)
+    pdf.cell(200, 10, txt=f"Phone: {phone}", ln=True)
+    pdf.cell(200, 10, txt=f"Address: {address}", ln=True)
+    pdf.ln(5)
     for k, v in input_df.iloc[0].items():
         line = f"{k.capitalize()}: {v}"
         safe_line = line.encode('latin-1', 'ignore').decode('latin-1')
