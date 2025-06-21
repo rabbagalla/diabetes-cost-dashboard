@@ -8,8 +8,12 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error, r2_score
 from xgboost import XGBRegressor
 
+# ------------------------------
+# PAGE SETUP
+# ------------------------------
 st.set_page_config(page_title="Healthcare Cost Predictor", layout="centered")
 st.title("💊 AI-Powered Healthcare Cost Prediction")
 st.markdown("Estimate medical costs based on patient details. Useful for insurers & population health planning.")
@@ -38,7 +42,7 @@ def load_data():
 df = load_data()
 
 # ------------------------------
-# TRAIN MODEL FROM SCRATCH
+# MODEL TRAINING
 # ------------------------------
 features = ['age', 'sex', 'bmi', 'children', 'smoker', 'region', 'diabetes_risk']
 target = 'charges'
@@ -62,7 +66,29 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 model.fit(X_train, y_train)
 
 # ------------------------------
-# STREAMLIT FORM UI
+# METRICS DISPLAY (SIDEBAR)
+# ------------------------------
+y_pred = model.predict(X_test)
+mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+st.sidebar.header("📊 Model Performance")
+st.sidebar.metric("MAE", f"${mae:,.2f}")
+st.sidebar.metric("R² Score", f"{r2:.2f}")
+
+# ------------------------------
+# SHAP GLOBAL FEATURE IMPORTANCE
+# ------------------------------
+explainer = shap.Explainer(model.named_steps['xgb'], model.named_steps['preprocessor'].transform(X_train))
+shap_values = explainer(model.named_steps['preprocessor'].transform(X_train))
+
+fig_global, ax_global = plt.subplots(figsize=(8, 4))
+shap.plots.bar(shap_values, show=False)
+st.sidebar.subheader("🔍 Top Cost Drivers")
+st.sidebar.pyplot(fig_global)
+
+# ------------------------------
+# USER INPUT FORM
 # ------------------------------
 with st.form("input_form"):
     age = st.slider("Age", 18, 100, 40)
@@ -76,6 +102,9 @@ with st.form("input_form"):
 
     submitted = st.form_submit_button("Predict Cost")
 
+# ------------------------------
+# COST PREDICTION
+# ------------------------------
 if submitted:
     input_df = pd.DataFrame([{
         "age": age,
@@ -90,18 +119,17 @@ if submitted:
     prediction = model.predict(input_df)[0]
     st.subheader(f"💰 Predicted Medical Cost: **${prediction:,.2f}**")
 
-    # ------------------------------
-    # SHAP EXPLANATION
-    # ------------------------------
+    # SHAP EXPLANATION FOR INDIVIDUAL
     st.markdown("---")
-    st.subheader("🔍 Why this prediction? (SHAP Explanation)")
+    st.subheader("📌 Why this prediction? (SHAP)")
 
     processed_input = model.named_steps['preprocessor'].transform(input_df)
     feature_names = model.named_steps['preprocessor'].get_feature_names_out()
     processed_df = pd.DataFrame(processed_input, columns=feature_names)
 
-    explainer = shap.Explainer(model.named_steps['xgb'])
-    shap_values = explainer(processed_df)
+    individual_explainer = shap.Explainer(model.named_steps['xgb'], processed_df)
+    individual_shap = individual_explainer(processed_df)
 
-    shap.plots.waterfall(shap_values[0], show=False)
-    st.pyplot(bbox_inches="tight")
+    fig_individual, ax_individual = plt.subplots(figsize=(8, 6))
+    shap.plots.waterfall(individual_shap[0], show=False)
+    st.pyplot(fig_individual)
