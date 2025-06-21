@@ -127,8 +127,8 @@ if submitted:
     feature_names = model.named_steps['preprocessor'].get_feature_names_out()
     processed_df = pd.DataFrame(processed_input, columns=feature_names)
 
-    individual_explainer = shap.Explainer(model.named_steps['xgb'], processed_df)
-    individual_shap = individual_explainer(processed_df)
+    # ✅ Fix: Use global explainer instead of new one
+    individual_shap = explainer(processed_df)
 
     fig_individual, ax_individual = plt.subplots(figsize=(8, 6))
     shap.plots.waterfall(individual_shap[0], show=False)
