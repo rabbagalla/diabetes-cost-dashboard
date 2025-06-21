@@ -26,6 +26,29 @@ def connect_sheet():
     client = gspread.authorize(creds)
     sheet = client.open("Patient_Cost_Data").sheet1
     return sheet
+    # ------------------------------
+    # Google Sheets Integration
+    # ------------------------------
+    import gspread
+    from oauth2client.service_account import ServiceAccountCredentials
+    import json
+    import os
+
+    # Load credentials from secrets
+    creds_dict = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"])
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    client = gspread.authorize(creds)
+
+    # Open the sheet (must already exist and be shared with the service account)
+    sheet = client.open("Patient_Cost_Records").sheet1
+
+    # Prepare data to store
+    sheet.append_row([
+        name, age, height_cm, weight_kg, bmi,
+        children, smoker, sex, region,
+        diabetes_risk, f"${prediction:,.2f}", phone, address
+    ])
 
 # -------------------------
 # Streamlit Page Setup
