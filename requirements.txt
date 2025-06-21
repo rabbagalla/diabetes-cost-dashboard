@@ -6,3 +6,6 @@ scikit-learn
 shap
 matplotlib
 fpdf
+gspread
+oauth2client
+
