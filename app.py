@@ -133,7 +133,7 @@ if submitted:
         st.write(s)
 
     # ------------------------------
-    # PDF Report Generator
+    # PDF Report Generator (Safe Encoding)
     # ------------------------------
     pdf = FPDF()
     pdf.add_page()
@@ -145,12 +145,15 @@ if submitted:
     pdf.ln(10)
     pdf.cell(200, 10, txt="Input Summary:", ln=True)
     for k, v in input_df.iloc[0].items():
-        pdf.cell(200, 10, txt=f"{k.capitalize()}: {v}", ln=True)
+        line = f"{k.capitalize()}: {v}"
+        safe_line = line.encode('latin-1', 'ignore').decode('latin-1')
+        pdf.cell(200, 10, txt=safe_line, ln=True)
 
     pdf.ln(5)
-    pdf.cell(200, 10, txt="Recommendations:", ln=True)
+    pdf.cell(200, 10, txt="Suggestions to Reduce Future Costs:", ln=True)
     for s in suggestions:
-        pdf.multi_cell(0, 10, txt=s)
+        safe_s = s.replace("•", "-").encode('latin-1', 'ignore').decode('latin-1')
+        pdf.multi_cell(0, 10, txt=safe_s)
 
     pdf_output = BytesIO()
     pdf.output(pdf_output)
