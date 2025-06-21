@@ -75,7 +75,11 @@ st.sidebar.pyplot(fig_global)
 with st.form("input_form"):
     name = st.text_input("Patient Name", value="John Doe")
     age = st.slider("Age", 18, 100, 40)
-    bmi = st.slider("BMI", 10.0, 50.0, 25.0)
+    height_cm = st.number_input("Height (in cm)", min_value=100.0, max_value=250.0, value=170.0)
+weight_kg = st.number_input("Weight (in kg)", min_value=30.0, max_value=200.0, value=70.0)
+bmi = round(weight_kg / ((height_cm / 100) ** 2), 2)
+st.markdown(f"**Calculated BMI:** {bmi}")
+
     children = st.slider("Number of Children", 0, 5, 0)
     smoker = st.selectbox("Smoker?", ["yes", "no"])
     sex = st.selectbox("Sex", ["male", "female"])
