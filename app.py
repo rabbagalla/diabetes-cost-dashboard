@@ -146,7 +146,7 @@ if submitted:
     pdf_output = BytesIO(pdf.output(dest='S').encode('latin1'))
     st.download_button("📥 Download Patient Report (PDF)", data=pdf_output, file_name=f"{name.replace(' ', '_')}_report.pdf", mime="application/pdf")
 
-    # Google Sheets logging with timestamp
+       # Google Sheets logging with timestamp
     if "GOOGLE_SERVICE_ACCOUNT_JSON" in st.secrets:
         try:
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -156,8 +156,9 @@ if submitted:
             sheet = client.open("PatientCostData").worksheet("Sheet1")
             sheet.append_row([
                 name, phone, address, age, height_cm, weight_kg, bmi,
-                smoker, sex, region, children, diabetes_risk, f"${prediction:,.2f}",
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                smoker, sex, region, children, diabetes_risk,
+                f"${prediction:,.2f}", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ])
+            st.success("✅ Patient data successfully saved to Google Sheet.")
         except Exception as e:
-            st.error(f"⚠️ Error writing to Google Sheet: {e}")
+            st.error("⚠️ Something went wrong while saving to Google Sheet. Please check permissions and sheet name.")
