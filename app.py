@@ -135,6 +135,9 @@ if submitted:
     # ------------------------------
     # PDF Report Generator (Safe Encoding)
     # ------------------------------
+        # ------------------------------
+    # PDF Report Generator (Safe Encoding)
+    # ------------------------------
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -155,9 +158,9 @@ if submitted:
         safe_s = s.replace("•", "-").encode('latin-1', 'ignore').decode('latin-1')
         pdf.multi_cell(0, 10, txt=safe_s)
 
-pdf_bytes = pdf.output(dest='S').encode('latin1')
-pdf_output = BytesIO(pdf_bytes)
-
+    # ✅ Output to bytes for Streamlit
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    pdf_output = BytesIO(pdf_bytes)
 
     st.download_button(
         label="📥 Download Patient Report (PDF)",
