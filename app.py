@@ -72,13 +72,18 @@ shap.plots.bar(shap_values, show=False)
 st.sidebar.subheader("🔍 Top Cost Drivers")
 st.sidebar.pyplot(fig_global)
 
+# ==============================
+# User Form with BMI Calculation
+# ==============================
+
 with st.form("input_form"):
     name = st.text_input("Patient Name", value="John Doe")
     age = st.slider("Age", 18, 100, 40)
     height_cm = st.number_input("Height (in cm)", min_value=100.0, max_value=250.0, value=170.0)
-weight_kg = st.number_input("Weight (in kg)", min_value=30.0, max_value=200.0, value=70.0)
-bmi = round(weight_kg / ((height_cm / 100) ** 2), 2)
-st.markdown(f"**Calculated BMI:** {bmi}")
+    weight_kg = st.number_input("Weight (in kg)", min_value=30.0, max_value=200.0, value=70.0)
+
+    bmi = round(weight_kg / ((height_cm / 100) ** 2), 2)
+    st.markdown(f"**Calculated BMI:** {bmi}")
 
     children = st.slider("Number of Children", 0, 5, 0)
     smoker = st.selectbox("Smoker?", ["yes", "no"])
@@ -88,6 +93,10 @@ st.markdown(f"**Calculated BMI:** {bmi}")
     diabetes_risk = 1 if (bmi > 30 and age > 45) or (smoker == 'yes' and bmi > 28) else 0
 
     submitted = st.form_submit_button("Predict Cost")
+
+# ===========================
+# Model Prediction + Output
+# ===========================
 
 if submitted:
     input_df = pd.DataFrame([{
@@ -115,9 +124,9 @@ if submitted:
     shap.plots.waterfall(individual_shap[0], show=False)
     st.pyplot(fig_individual)
 
-    # ------------------------------
-    # Suggestions
-    # ------------------------------
+    # ========================
+    # Cost-Saving Suggestions
+    # ========================
     st.markdown("---")
     st.subheader("💡 Suggestions to Reduce Future Costs")
 
@@ -136,12 +145,9 @@ if submitted:
     for s in suggestions:
         st.write(s)
 
-    # ------------------------------
-    # PDF Report Generator (Safe Encoding)
-    # ------------------------------
-        # ------------------------------
-    # PDF Report Generator (Safe Encoding)
-    # ------------------------------
+    # ======================
+    # PDF Report Generator
+    # ======================
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -162,7 +168,6 @@ if submitted:
         safe_s = s.replace("•", "-").encode('latin-1', 'ignore').decode('latin-1')
         pdf.multi_cell(0, 10, txt=safe_s)
 
-    # ✅ Output to bytes for Streamlit
     pdf_bytes = pdf.output(dest='S').encode('latin1')
     pdf_output = BytesIO(pdf_bytes)
 
