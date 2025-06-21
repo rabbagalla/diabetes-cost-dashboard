@@ -16,11 +16,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
 from xgboost import XGBRegressor
 
-# Config
+# Page settings
 st.set_page_config(page_title="Healthcare Cost Predictor", layout="centered")
 st.title("💊 AI-Powered Healthcare Cost Prediction")
 
-# Load data
+# Load and preprocess data
 @st.cache_data
 def load_data():
     url = "https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/insurance.csv"
@@ -40,8 +40,6 @@ def load_data():
     return df
 
 df = load_data()
-
-# Prepare features
 features = ['age', 'sex', 'bmi', 'children', 'smoker', 'region', 'diabetes_risk']
 target = 'charges'
 X = df[features]
@@ -66,12 +64,12 @@ model.fit(X_train, y_train)
 mae = mean_absolute_error(y_test, model.predict(X_test))
 r2 = r2_score(y_test, model.predict(X_test))
 
-# Sidebar metrics
+# Sidebar model performance
 st.sidebar.header("📊 Model Performance")
 st.sidebar.metric("MAE", f"${mae:,.2f}")
 st.sidebar.metric("R² Score", f"{r2:.2f}")
 
-# SHAP
+# SHAP global
 explainer = shap.Explainer(model.named_steps['xgb'], model.named_steps['preprocessor'].transform(X_train))
 shap_values = explainer(model.named_steps['preprocessor'].transform(X_train))
 fig_global, ax_global = plt.subplots(figsize=(8, 4))
@@ -79,7 +77,7 @@ shap.plots.bar(shap_values, show=False)
 st.sidebar.subheader("🔍 Top Cost Drivers")
 st.sidebar.pyplot(fig_global)
 
-# Input Form
+# Input form
 with st.form("input_form"):
     name = st.text_input("Patient Name", value="John Doe")
     phone = st.text_input("Phone Number")
@@ -95,7 +93,6 @@ with st.form("input_form"):
     sex = st.selectbox("Sex", ["male", "female"])
     region = st.selectbox("Region", ["southeast", "southwest", "northeast", "northwest"])
     diabetes_risk = 1 if (bmi > 30 and age > 45) or (smoker == 'yes' and bmi > 28) else 0
-
     submitted = st.form_submit_button("Predict Cost")
 
 if submitted:
@@ -122,7 +119,6 @@ if submitted:
     shap.plots.waterfall(individual_shap[0], show=False)
     st.pyplot(fig_individual)
 
-    # Suggestions
     st.markdown("---")
     st.subheader("💡 Suggestions to Reduce Future Costs")
     suggestions = []
@@ -139,7 +135,7 @@ if submitted:
     for s in suggestions:
         st.write(s)
 
-    # PDF Generation
+    # PDF Report
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -156,13 +152,16 @@ if submitted:
 
     # Google Sheets logging
     if "GOOGLE_SERVICE_ACCOUNT_JSON" in st.secrets:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds_dict = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"])
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
-        sheet = client.open("PatientCostData").sheet1  # Sheet must exist
-        sheet.append_row([
-            name, phone, address, age, height_cm, weight_kg, bmi,
-            children, smoker, sex, region,
-            diabetes_risk, f"${prediction:,.2f}"
-        ])
+        try:
+            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+            creds_dict = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"])
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+            client = gspread.authorize(creds)
+            sheet = client.open("PatientCostData").sheet1
+            sheet.append_row([
+                name, phone, address, age, height_cm, weight_kg, bmi,
+                children, smoker, sex, region,
+                diabetes_risk, f"${prediction:,.2f}"
+            ])
+        except Exception as e:
+            st.error(f"⚠️ Error writing to Google Sheet: {e}")
