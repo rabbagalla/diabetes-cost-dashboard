@@ -1,4 +1,3 @@
-from datetime import datetime
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -9,6 +8,7 @@ from fpdf import FPDF
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
+from datetime import datetime
 
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
@@ -17,14 +17,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
 from xgboost import XGBRegressor
 
-# Page setup
+# Page config
 st.set_page_config(page_title="Healthcare Cost Predictor", layout="centered")
 st.title("💊 AI-Powered Healthcare Cost Prediction")
 
+# Load and preprocess data
 @st.cache_data
 def load_data():
     url = "https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/insurance.csv"
     df = pd.read_csv(url)
+
     def diabetes_risk(row):
         if row['bmi'] > 30 and row['age'] > 45:
             return 1
@@ -34,6 +36,7 @@ def load_data():
             return 1
         else:
             return 0
+
     df['diabetes_risk'] = df.apply(diabetes_risk, axis=1)
     return df
 
@@ -67,7 +70,7 @@ st.sidebar.header("📊 Model Performance")
 st.sidebar.metric("MAE", f"${mae:,.2f}")
 st.sidebar.metric("R² Score", f"{r2:.2f}")
 
-# SHAP global plot
+# SHAP global importance
 explainer = shap.Explainer(model.named_steps['xgb'], model.named_steps['preprocessor'].transform(X_train))
 shap_values = explainer(model.named_steps['preprocessor'].transform(X_train))
 fig_global, ax_global = plt.subplots(figsize=(8, 4))
@@ -75,33 +78,35 @@ shap.plots.bar(shap_values, show=False)
 st.sidebar.subheader("🔍 Top Cost Drivers")
 st.sidebar.pyplot(fig_global)
 
-# Input Form
+# Input form
 with st.form("input_form"):
     name = st.text_input("Patient Name", value="John Doe")
     phone = st.text_input("Phone Number")
     address = st.text_area("Patient Address")
     age = st.slider("Age", 18, 100, 40)
-    height_cm = st.number_input("Height (cm)", 100.0, 250.0, 170.0)
-    weight_kg = st.number_input("Weight (kg)", 30.0, 200.0, 70.0)
+    height_cm = st.number_input("Height (cm)", min_value=100.0, max_value=250.0, value=170.0)
+    weight_kg = st.number_input("Weight (kg)", min_value=30.0, max_value=200.0, value=70.0)
     bmi = round(weight_kg / ((height_cm / 100) ** 2), 2)
     st.markdown(f"**Calculated BMI:** {bmi}")
-    children = st.slider("Children", 0, 5, 0)
+    children = st.slider("Number of Children", 0, 5, 0)
     smoker = st.selectbox("Smoker?", ["yes", "no"])
     sex = st.selectbox("Sex", ["male", "female"])
     region = st.selectbox("Region", ["southeast", "southwest", "northeast", "northwest"])
     diabetes_risk = 1 if (bmi > 30 and age > 45) or (smoker == 'yes' and bmi > 28) else 0
     submitted = st.form_submit_button("Predict Cost")
 
+# Prediction logic
 if submitted:
     input_df = pd.DataFrame([{
-        "age": age, "bmi": bmi, "children": children, "smoker": smoker,
-        "sex": sex, "region": region, "diabetes_risk": diabetes_risk
+        "age": age, "bmi": bmi, "children": children,
+        "smoker": smoker, "sex": sex, "region": region, "diabetes_risk": diabetes_risk
     }])
+
     prediction = model.predict(input_df)[0]
     st.subheader(f"💰 Predicted Medical Cost for {name}: **${prediction:,.2f}**")
 
     st.markdown("---")
-    st.subheader("📌 Why this prediction?")
+    st.subheader("📌 Why this prediction? (SHAP)")
     processed_input = model.named_steps['preprocessor'].transform(input_df)
     feature_names = model.named_steps['preprocessor'].get_feature_names_out()
     processed_df = pd.DataFrame(processed_input, columns=feature_names)
@@ -110,7 +115,6 @@ if submitted:
     shap.plots.waterfall(individual_shap[0], show=False)
     st.pyplot(fig_individual)
 
-    # Suggestions
     st.markdown("---")
     st.subheader("💡 Suggestions to Reduce Future Costs")
     suggestions = []
@@ -127,12 +131,12 @@ if submitted:
     for s in suggestions:
         st.write(s)
 
-    # PDF Download
+    # PDF Report
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt=f"Patient Report: {name}", ln=True, align="C")
-    pdf.cell(200, 10, txt=f"Predicted Medical Cost: ${prediction:,.2f}", ln=True)
+    pdf.cell(200, 10, txt=f"Predicted Medical Cost: ${prediction:,.2f}", ln=True, align="L")
     pdf.cell(200, 10, txt=f"Phone: {phone}", ln=True)
     pdf.multi_cell(0, 10, txt=f"Address: {address}")
     pdf.ln(10)
@@ -140,10 +144,9 @@ if submitted:
     for s in suggestions:
         pdf.multi_cell(0, 10, txt=s.replace("•", "-"))
     pdf_output = BytesIO(pdf.output(dest='S').encode('latin1'))
-    st.download_button("📥 Download Patient Report (PDF)", data=pdf_output,
-                       file_name=f"{name.replace(' ', '_')}_report.pdf", mime="application/pdf")
+    st.download_button("📥 Download Patient Report (PDF)", data=pdf_output, file_name=f"{name.replace(' ', '_')}_report.pdf", mime="application/pdf")
 
-    # Google Sheets logging
+    # Google Sheets logging with timestamp
     if "GOOGLE_SERVICE_ACCOUNT_JSON" in st.secrets:
         try:
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -153,8 +156,8 @@ if submitted:
             sheet = client.open("PatientCostData").worksheet("Sheet1")
             sheet.append_row([
                 name, phone, address, age, height_cm, weight_kg, bmi,
-                smoker, sex, region, children,
-                diabetes_risk, f"${prediction:,.2f}", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                smoker, sex, region, children, diabetes_risk, f"${prediction:,.2f}",
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ])
         except Exception as e:
             st.error(f"⚠️ Error writing to Google Sheet: {e}")
